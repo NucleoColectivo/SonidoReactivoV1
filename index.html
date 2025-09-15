@@ -3,1054 +3,380 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Arte Interactivo y Sonido Reactivo</title>
-    <!-- Enlace a Tailwind CSS -->
+    <title>Malla de Gravedad Sonora Interactiva</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/tone@14.7.58/build/Tone.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
     <style>
-        /* --- Paleta de Colores y Tipografía --- */
-        :root {
-            --brand-color: #38bdf8; /* cyan-400 */
-            --dark-bg: #030712;    /* gray-950 */
-            --light-text: #f9fafb;   /* gray-50 */
-            --gray-text: #9ca3af;   /* gray-400 */
-        }
         body {
+            background-color: #000;
+            color: #fff;
+            font-family: sans-serif;
             margin: 0;
             overflow: hidden;
-            background: #0a0a0a; /* Fondo estático */
-            color: var(--light-text);
-            font-family: 'Inter', sans-serif;
-            overscroll-behavior: none;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh; /* Asegura que el body tenga al menos la altura de la ventana */
         }
-
-        /* --- Contenedor Principal de la Escena 3D --- */
-        #container {
+        .gravity-mesh-container {
             width: 100vw;
             height: 100vh;
-            cursor: grab;
-            touch-action: none; /* Evita el zoom/scroll del navegador en el canvas */
-        }
-        #container.grabbing {
-            cursor: grabbing;
-        }
-
-        /* --- Superposición de Bienvenida --- */
-        #overlay {
-            position: fixed; /* Usar 'fixed' para cubrir toda la ventana */
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
             display: flex;
-            align-items: center;
-            justify-content: center;
-            flex-direction: column;
-            background: linear-gradient(to bottom, rgba(3,7,18,0.95), rgba(30,27,75,0.95));
-            backdrop-filter: blur(8px);
-            z-index: 20;
-            transition: opacity 0.8s ease-in-out;
-            pointer-events: auto;
-            overflow-y: auto;
-            padding: 1rem;
-            text-align: center;
-        }
-        .overlay-screen {
-            transition: opacity 0.5s ease-in-out;
-            display: flex;
-            flex-direction: column;
             justify-content: center;
             align-items: center;
-            height: 100%;
-            width: 100%;
-            padding: 1rem;
+            position: relative;
         }
-        
-        /* --- Botón de Inicio --- */
-        #startButton, #continueButton {
-            padding: 0.75rem 2rem;
-            font-size: 1.1rem;
-            background-color: var(--brand-color);
-            color: #fff;
-            border: none;
-            border-radius: 999px;
-            cursor: pointer;
-            transition: background-color 0.3s, transform 0.2s, opacity 0.3s;
-            box-shadow: 0 4px 20px rgba(56, 189, 248, 0.4);
-            font-weight: 600;
+        #gravityMeshCanvas {
+            display: block;
+            background-color: #000;
         }
-        #startButton:hover, #continueButton:hover {
-            background-color: #0ea5e9; /* cyan-500 */
-            transform: scale(1.05);
-        }
-        #startButton:disabled {
-            background-color: #4b5563; /* gray-600 */
-            cursor: wait;
-            transform: scale(1);
-            opacity: 0.7;
-        }
-
-        /* --- Panel de Control --- */
-        #controls-panel {
-            position: absolute;
-            top: 20px;
-            left: 20px;
-            z-index: 10;
-            max-width: 288px;
-            width: calc(100% - 40px);
-            background-color: rgba(17, 24, 39, 0.7); /* gray-900 with transparency */
-            backdrop-filter: blur(12px);
-            padding: 1rem;
-            border-radius: 1rem;
-            border: 1px solid rgba(75, 85, 99, 0.5); /* gray-700 with transparency */
-            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
-            display: none;
-            transition: opacity 0.3s ease-in-out, transform 0.3s ease-in-out;
-            pointer-events: auto;
-        }
-        /* Nueva regla para el movimiento con transform */
-        .draggable {
-            touch-action: none;
-            user-select: none;
-        }
-        .draggable.dragging {
-            cursor: grabbing;
-        }
-        
-        /* Estilos para el estado minimizado del panel */
-        #controls-panel.minimized {
-            transform: translateY(-200%);
-            opacity: 0;
-            pointer-events: none;
-        }
-
-        /* --- Botón de Menú (minimizar) --- */
-        #menu-button {
+        .instructions {
             position: absolute;
             bottom: 20px;
-            left: 20px;
-            z-index: 10;
-            background-color: rgba(17, 24, 39, 0.7);
-            backdrop-filter: blur(12px);
-            padding: 0.75rem;
-            border-radius: 999px;
-            border: 1px solid rgba(75, 85, 99, 0.5);
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
-            cursor: pointer;
-            display: none; /* Oculto por defecto */
-            transition: opacity 0.3s ease-in-out;
+            text-align: center;
+            width: 100%;
+            font-size: 0.9rem;
+            color: rgba(255, 255, 255, 0.7);
         }
-        
-        /* --- Contenedor de la Cámara --- */
-        #camera-container {
-            position: absolute;
-            top: 20px;
-            right: 20px;
-            border: 2px solid var(--brand-color);
-            border-radius: 0.75rem;
-            overflow: hidden;
-            background-color: #111827; /* gray-900 */
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
-            z-index: 15;
-            display: none;
-            width: 200px;
-            height: 150px;
-            transition: opacity 0.3s ease-in-out;
-            touch-action: none;
-        }
-        #webcam-video, #output-canvas {
+        .start-overlay {
             position: absolute;
             top: 0;
             left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(5px);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            text-align: center;
+            z-index: 10;
+        }
+        .draggable-video-container {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            width: 320px;
+            height: 240px;
+            background: #000;
+            border: 2px solid #333;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+            cursor: move;
+            overflow: hidden;
+            z-index: 20;
+            resize: both; /* Permite redimensionar en ambos ejes */
+        }
+        #input-video {
             width: 100%;
             height: 100%;
             object-fit: cover;
+            transform: scaleX(-1); /* Refleja horizontalmente para el modo selfie */
         }
-        #webcam-video {
-            transform: scaleX(-1); 
-        }
-
-        /* --- Tarjetas de Características --- */
-        .feature-card {
-            background-color: rgba(255, 255, 255, 0.05);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: 0.75rem;
-            padding: 1.5rem;
-            text-align: center;
-            width: 180px;
-            transition: transform 0.3s ease-in-out;
-        }
-        .feature-card:hover {
-            transform: translateY(-5px);
-        }
-
-        /* Estilo para el nivel de audio */
-        .audio-bar {
-            background-color: #4b5563;
-            transition: background-color 0.1s ease-in-out;
-        }
-        .audio-bar.active {
-            background-color: #34d399;
-        }
-
-        /* Estilos para Móviles */
-        @media (max-width: 768px) {
-            .overlay-screen {
-                padding: 1rem;
-            }
-            .feature-card-container { flex-direction: column; gap: 1rem; }
-            .feature-card { width: 100%; max-width: 320px; padding: 1rem; }
-            #overlay h1 { font-size: 2.2rem; }
-            #overlay h2 { font-size: 1.3rem; }
-            #overlay .description { 
-                font-size: 0.9rem; 
-                margin-top: 1.5rem;
-                margin-bottom: 2rem;
-            }
-            #camera-container {
-                width: 120px;
-                height: 90px;
-                top: 10px;
-                right: 10px;
-            }
-            #controls-panel {
-                top: auto;
-                bottom: 20px;
-                left: 50%;
-                transform: translateX(-50%);
-                width: 90%;
-                max-width: 400px;
-            }
-            #menu-button {
-                bottom: 10px;
-                left: 10px;
-            }
-            #startButton, #continueButton {
-                padding: 0.6rem 1.5rem;
-                font-size: 1rem;
-            }
-        }
-        
-        /* Estilos específicos para el título */
-        .glitch-text {
-            position: relative;
-            font-size: clamp(2.2rem, 8vw, 4rem);
-            font-weight: 700;
-            line-height: 1.2;
-            text-transform: uppercase;
-            user-select: none;
-            z-index: 1;
-        }
-
-        .glitch-text span {
-            display: block;
-        }
-
-        .glitch-text::before,
-        .glitch-text::after {
-            content: attr(data-text);
+        .video-overlay-canvas {
             position: absolute;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
-            pointer-events: none;
-            z-index: -1;
-        }
-
-        .glitch-text::before {
-            color: cyan;
-            opacity: 0.75;
-            text-shadow: -2px 0 0 #ff00ff;
-            clip-path: inset(calc(var(--glitch-offset-before) * 1%) 0 0 0);
-        }
-
-        .glitch-text::after {
-            color: #ff00ff;
-            opacity: 0.75;
-            text-shadow: 2px 0 0 cyan;
-            clip-path: inset(0 0 calc(var(--glitch-offset-after) * 1%) 0);
-        }
-
-        @keyframes glitch-static {
-            0% { --glitch-offset-before: 0; --glitch-offset-after: 0; }
-            10% { --glitch-offset-before: 5; --glitch-offset-after: 10; }
-            20% { --glitch-offset-before: 15; --glitch-offset-after: 5; }
-            30% { --glitch-offset-before: 2; --glitch-offset-after: 18; }
-            40% { --glitch-offset-before: 12; --glitch-offset-after: 7; }
-            50% { --glitch-offset-before: 8; --glitch-offset-after: 14; }
-            60% { --glitch-offset-before: 18; --glitch-offset-after: 2; }
-            70% { --glitch-offset-before: 9; --glitch-offset-after: 11; }
-            80% { --glitch-offset-before: 16; --glitch-offset-after: 6; }
-            90% { --glitch-offset-before: 3; --glitch-offset-after: 19; }
-            100% { --glitch-offset-before: 0; --glitch-offset-after: 0; }
-        }
-
-        .glitch-text::before,
-        .glitch-text::after {
-            animation: glitch-static 5s infinite step-end;
+            z-index: 25;
+            transform: scaleX(-1);
         }
     </style>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
-    <!-- Contenedor del renderizado 3D -->
-    <div id="container"></div>
-
-    <!-- Contenedor de la cámara con el canvas para dibujar -->
-    <div id="camera-container" class="draggable">
-        <video id="webcam-video" autoplay playsinline></video>
-        <canvas id="output-canvas"></canvas>
-    </div>
-
-    <!-- Botón de menú para el panel colapsado -->
-    <button id="menu-button" class="absolute bottom-5 left-5 z-10 hidden flex items-center justify-center bg-gray-900/70 backdrop-blur-md p-3 rounded-full border border-gray-700/50 shadow-lg transition-all duration-300 hover:scale-110">
-        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6 text-white">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
-        </svg>
-    </button>
-
-    <!-- Panel de Control -->
-    <div id="controls-panel" class="draggable">
-        <div id="controls-panel-handle" class="flex justify-between items-center mb-4 cursor-grab">
-            <h2 class="font-bold text-lg text-white/90">Control</h2>
-            <button id="minimize-btn" class="text-white/80 hover:text-white transition-colors">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 12h-15" />
-                </svg>
+    <div class="gravity-mesh-container">
+        <canvas id="gravityMeshCanvas"></canvas>
+        <div id="start-overlay" class="start-overlay">
+            <h1 class="text-3xl font-bold mb-4">Malla de Gravedad Sonora</h1>
+            <p class="mb-6">Haz clic para comenzar y crea ondas sonoras en la malla. También puedes usar tus manos.</p>
+            <button id="startButton" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-full transition-colors">
+                Comenzar
             </button>
         </div>
-        
-        <div class="space-y-4 mb-4">
-            <!-- Selector de modo de instrumento -->
-            <div>
-                <label for="mode-select" class="block font-semibold mb-1 text-white/80 text-sm">Modo de Sonido</label>
-                <select id="mode-select" class="w-full bg-gray-700 p-2 rounded-md text-white border-none focus:ring-2 focus:ring-blue-500 text-sm">
-                    <option value="sintetizador">Sintetizador</option>
-                    <option value="piano">Piano</option>
-                    <option value="cuerdas">Cuerdas</option>
-                </select>
-            </div>
-            <!-- Control de volumen -->
-            <div>
-                <div class="flex justify-between items-center text-sm font-semibold">
-                    <label for="volume-slider">Volumen</label>
-                    <span id="volume-value">100%</span>
-                </div>
-                <input type="range" id="volume-slider" min="0" max="100" value="100" class="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer">
-            </div>
-            <!-- Control de reverberación -->
-            <div>
-                <div class="flex justify-between items-center text-sm font-semibold">
-                    <label for="reverb-slider">Reverberación</label>
-                    <span id="reverb-value">50%</span>
-                </div>
-                <input type="range" id="reverb-slider" min="0" max="100" value="50" class="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer">
-            </div>
-        </div>
-
-        <div class="space-y-2 mb-4">
-            <button id="reset-btn" class="w-full bg-slate-600 hover:bg-slate-500 p-2 rounded-md font-bold transition-colors text-white text-sm mb-2">Restablecer Vista</button>
-            <button id="stop-btn" class="w-full bg-red-600 hover:bg-red-500 p-2 rounded-md font-bold transition-colors text-white text-sm">Detener Experiencia</button>
-        </div>
-
-        <div class="space-y-4 pt-2 border-t border-gray-700">
-            <div>
-                <div class="flex items-center space-x-2">
-                    <span id="hand-status-indicator" class="w-3 h-3 rounded-full bg-gray-500 transition-colors"></span>
-                    <p class="font-semibold text-white/80 text-sm">Detección de Manos</p>
-                </div>
-                <p id="hand-status-text" class="text-xs text-gray-400 pl-5">No se detectan manos</p>
-            </div>
-            <div>
-                <p class="font-semibold mb-2 text-white/80 text-sm">Nivel de Audio</p>
-                <div id="audio-level-container" class="flex items-center space-x-1 h-3 w-full">
-                    <div class="flex-1 h-full bg-gray-600 rounded-sm audio-bar"></div> <div class="flex-1 h-full bg-gray-600 rounded-sm audio-bar"></div> <div class="flex-1 h-full bg-gray-600 rounded-sm audio-bar"></div> <div class="flex-1 h-full bg-gray-600 rounded-sm audio-bar"></div> <div class="flex-1 h-full bg-gray-600 rounded-sm audio-bar"></div> <div class="flex-1 h-full bg-gray-600 rounded-sm audio-bar"></div> <div class="flex-1 h-full bg-gray-600 rounded-sm audio-bar"></div> <div class="flex-1 h-full bg-gray-600 rounded-sm audio-bar"></div> <div class="flex-1 h-full bg-gray-600 rounded-sm audio-bar"></div> <div class="flex-1 h-full bg-gray-600 rounded-sm audio-bar"></div>
-                </div>
-            </div>
+        <div class="instructions">
+            Usa tus manos para interactuar con la malla. La onda visual está sincronizada con el tono del sonido.
         </div>
     </div>
     
-    <!-- Superposición de Bienvenida -->
-    <div id="overlay">
-        <!-- Pantalla 1: Bienvenida -->
-        <div id="welcome-screen" class="overlay-screen max-w-4xl mx-auto">
-            <h1 class="glitch-text" data-text="Arte Interactivo">Arte Interactivo</h1>
-            <h2 class="glitch-text" data-text="y Sonido Reactivo">y Sonido Reactivo</h2>
-            <p class="description text-base text-gray-300 max-w-2xl mx-auto mt-8 mb-10">Transforma tu mano en un instrumento. Toca los cubos para producir sonidos y efectos visuales en una experiencia inmersiva que fusiona arte, música y visión por computadora.</p>
-            <button id="continueButton">Continuar</button>
-        </div>
-
-        <!-- Pantalla 2: Iniciar -->
-        <div id="start-screen" class="overlay-screen max-w-4xl mx-auto" style="display: none; opacity: 0;">
-             <p class="description text-base text-gray-300 max-w-2xl mx-auto mb-10">
-                A continuación, se activará tu cámara para detectar los gestos de tu mano. Asegúrate de estar en un lugar bien iluminado y permite el acceso cuando el navegador lo solicite. ¡Prepárate para crear música con tus movimientos!
-            </p>
-            <div class="feature-card-container flex justify-center gap-6 mb-12 flex-wrap">
-                <div class="feature-card">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 mx-auto mb-4 text-cyan-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M21 7.5l-9-5.25L3 7.5m18 0l-9 5.25m9-5.25v9l-9 5.25M3 7.5l9 5.25M3 7.5v9l9 5.25m0-9v9" />
-                    </svg>
-                    <h3 class="font-semibold mb-2 text-white/80">Matriz 3D</h3>
-                    <p class="text-sm text-gray-400">Interactúa con cubos en un espacio tridimensional.</p>
-                </div>
-                <div class="feature-card">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 mx-auto mb-4 text-cyan-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M9 9l10.5-3m0 6.553v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 11-.99-3.467l2.31-.66a2.25 2.25 0 001.632-2.163zm0 0V2.25L9 5.25v10.303m0 0v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 01-.99-3.467l2.31-.66A2.25 2.25 0 009 15.553z" />
-                    </svg>
-                    <h3 class="font-semibold mb-2 text-white/80">Síntesis Polifónica</h3>
-                    <p class="text-sm text-gray-400">Crea melodías con una escala musical dinámica.</p>
-                </div>
-                <div class="feature-card">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 mx-auto mb-4 text-cyan-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M7.864 4.243A7.5 7.5 0 0119.5 10.5c0 2.92-.556 5.709-1.588 8.12-2.348 4.467-9.354 4.467-11.702 0A7.5 7.5 0 017.864 4.243z" />
-                    </svg>
-                    <h3 class="font-semibold mb-2 text-white/80">Detección con IA</h3>
-                    <p class="text-sm text-gray-400">Controla la experiencia con gestos de tu mano.</p>
-                </div>
-            </div>
-            <button id="startButton" disabled>Iniciando...</button>
-        </div>
+    <div id="video-container" class="draggable-video-container">
+        <video id="input-video"></video>
+        <canvas id="video-overlay-canvas" class="video-overlay-canvas"></canvas>
     </div>
+    
+    <script>
+        // --- Configuración del Canvas y la Malla ---
+        const canvas = document.getElementById('gravityMeshCanvas');
+        const ctx = canvas.getContext('2d');
+        const startButton = document.getElementById('startButton');
+        const startOverlay = document.getElementById('start-overlay');
+        const videoElement = document.getElementById('input-video');
+        const videoContainer = document.getElementById('video-container');
+        const videoOverlayCanvas = document.getElementById('video-overlay-canvas');
+        const videoOverlayCtx = videoOverlayCanvas.getContext('2d');
+        
+        const meshSize = 40; // Número de puntos por lado
+        const points = [];
+        
+        // --- Configuración de Audio con Tone.js ---
+        let oscillator;
+        let panner;
+        const usePentatonicScale = true;
+        
+        const pentatonicScale = [0, 2, 4, 7, 9];
+        const chromaticScale = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
 
-    <!-- Bibliotecas JS -->
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/tone@14.7.77/build/Tone.min.js"></script>
-    <script type="module">
-        import { HandLandmarker, FilesetResolver, DrawingUtils } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.9";
+        async function setupAudio() {
+            await Tone.start();
+            panner = new Tone.Panner().toDestination();
+            oscillator = new Tone.Oscillator(440, "sine").connect(panner).start();
+            oscillator.volume.value = -30;
+            console.log("Audio iniciado.");
+        }
+        
+        // --- MediaPipe Hands Configuration ---
+        const hands = new Hands({
+            locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+        });
+        hands.setOptions({
+            maxNumHands: 2,
+            modelComplexity: 1,
+            minDetectionConfidence: 0.7,
+            minTrackingConfidence: 0.5,
+            selfieMode: true,
+        });
+        let handsLandmarks = [];
+        hands.onResults((results) => {
+            handsLandmarks = results.multiHandLandmarks || [];
+            drawVideoOverlay(results);
+        });
 
-        // --- Verificación de Bibliotecas y Configuración ---
-        if (typeof THREE === 'undefined' || typeof Tone === 'undefined') {
-            document.body.innerHTML = '<div style="color: white; text-align: center; padding-top: 20%; font-size: 1.2rem;">Error crítico: Las bibliotecas no se cargaron. Por favor, refresca la página.</div>';
-            console.error("Critical error: Three.js or Tone.js failed to load.");
-            throw new Error("Three.js or Tone.js failed to load.");
+        const cameraFeed = new Camera(videoElement, {
+            onFrame: async () => {
+                await hands.send({ image: videoElement });
+            },
+            width: 1280,
+            height: 720
+        });
+
+        function startCamera() {
+            cameraFeed.start().then(() => {
+                console.log("Cámara iniciada.");
+            }).catch(err => {
+                console.error("Error al iniciar la cámara:", err);
+            });
         }
 
-        document.addEventListener('DOMContentLoaded', () => {
-            // --- CONSTANTES DE CONFIGURACIÓN ---
-            const NOTE_COOLDOWN = 250; 
-            const CUBE_COUNT = 50; // Total de cubos en la red neuronal
-            const MAX_DISTANCE = 5; // Distancia máxima para conectar nodos
-            const PREDICTION_INTERVAL = 1000 / 45; // 45 FPS
-            const ROTATION_SPEED = 0.0003;
-            const CAMERA_POSITION_Z_DESKTOP = 20;
-            const CAMERA_POSITION_Z_MOBILE = 32;
-            const PROPAGATION_SPEED = 25; // Velocidad de propagación de los efectos
-            const HAND_LINE_Z_POSITION = -15; // Z position for the hand line to be in front
-
-            // --- VARIABLES DE LA APLICACIÓN ---
-            const container = document.getElementById('container');
-            const overlay = document.getElementById('overlay');
-            const welcomeScreen = document.getElementById('welcome-screen');
-            const startScreen = document.getElementById('start-screen');
-            const continueButton = document.getElementById('continueButton');
-            const startButton = document.getElementById('startButton');
-            const videoElement = document.getElementById('webcam-video');
-            const cameraContainer = document.getElementById('camera-container');
-            const canvasElement = document.getElementById('output-canvas');
-            const controlsPanel = document.getElementById('controls-panel');
-            const menuButton = document.getElementById('menu-button');
-            const minimizeBtn = document.getElementById('minimize-btn');
-            const canvasCtx = canvasElement.getContext('2d');
-            const modeSelect = document.getElementById('mode-select');
-            const volumeSlider = document.getElementById('volume-slider');
-            const reverbSlider = document.getElementById('reverb-slider');
-            const volumeValueSpan = document.getElementById('volume-value');
-            const reverbValueSpan = document.getElementById('reverb-value');
-            const handStatusIndicator = document.getElementById('hand-status-indicator');
-            const handStatusText = document.getElementById('hand-status-text');
-            const audioLevelBars = Array.from(document.getElementById('audio-level-container').children);
-            const resetBtn = document.getElementById('reset-btn');
-            const stopBtn = document.getElementById('stop-btn');
-            const controlsPanelHandle = document.getElementById('controls-panel-handle');
+        function drawVideoOverlay(results) {
+            videoOverlayCanvas.width = videoElement.videoWidth;
+            videoOverlayCanvas.height = videoElement.videoHeight;
+            videoOverlayCtx.clearRect(0, 0, videoOverlayCanvas.width, videoOverlayCanvas.height);
+            videoOverlayCtx.save();
+            videoOverlayCtx.scale(-1, 1);
+            videoOverlayCtx.translate(-videoOverlayCanvas.width, 0);
             
-            let scene, camera, renderer, cubesGroup, linesGroup, handLinesGroup, currentSynth, reverb, audioMeter;
-            const raycaster = new THREE.Raycaster();
-            const handPointers = [new THREE.Vector2(), new THREE.Vector2()];
-            const activeEffects = new Map();
-            const propagationQueue = [];
-            const colorPalette = [
-                new THREE.Color("#818cf8"), // indigo
-                new THREE.Color("#a78bfa"), // violet
-                new THREE.Color("#f472b6"), // pink
-                new THREE.Color("#fb923c"), // orange
-                new THREE.Color("#60a5fa"), // blue
-                new THREE.Color("#34d399") // emerald
-            ];
-            const baseCubeColor = new THREE.Color(0x555555);
-            const blackColor = new THREE.Color(0x000000);
-            const baseLineColor = new THREE.Color(0x222222);
-            const handLineColor = new THREE.Color(0xffffff);
-            
-            let isAudioInitialized = false;
-            let lastVideoTime = -1;
-            let videoStream = null;
-            let animationFrameId = null;
-            let handLandmarker;
-            let latestHandLandmarks = null;
-            
-            const isMobile = () => /Android|webOS|iPhone|iPad|IEMobile|Opera Mini/i.test(navigator.userAgent);
-            const initialCameraPos = isMobile() ? CAMERA_POSITION_Z_MOBILE : CAMERA_POSITION_Z_DESKTOP;
-            let isGrabbing = false;
-            const previousMousePosition = { x: 0, y: 0 };
-            
-            // Estado de arrastre para los paneles
-            const dragState = {
-                isDragging: false,
-                target: null,
-                startX: 0,
-                startY: 0,
-                currentX: 0,
-                currentY: 0,
-                initialLeft: 0,
-                initialTop: 0,
-            };
-
-            // --- MAPA DE MODOS DE SONIDO ---
-            const synthModes = {
-                'sintetizador': () => new Tone.PolySynth(Tone.Synth, { oscillator: { type: "fatsawtooth" }, envelope: { attack: 0.01, decay: 0.4, sustain: 0.2, release: 0.8 } }),
-                'piano': () => new Tone.PolySynth(Tone.FMSynth, { modulationIndex: 10, envelope: { attack: 0.01, decay: 0.5, sustain: 0.1, release: 1 }, oscillator: { type: 'sine' } }),
-                'cuerdas': () => new Tone.PolySynth(Tone.Synth, { oscillator: { type: "sine" }, envelope: { attack: 2, decay: 0.5, sustain: 0.8, release: 3 } })
-            };
-            const musicalScale = ["C2", "D2", "E2", "F2", "G2", "A2", "B2", "C3", "D3", "E3", "F3", "G3", "A3", "B3", "C4", "D4", "E4", "F4", "G4", "A4", "B4", "C5", "D5", "E5", "F5", "G5", "A5", "B5"];
-
-            // --- INICIALIZACIÓN DE TRES.JS ---
-            function initThree() {
-                scene = new THREE.Scene();
-                scene.background = new THREE.Color(0x0a0a0a);
-                camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-                camera.position.z = initialCameraPos;
-                
-                renderer = new THREE.WebGLRenderer({ antialias: true });
-                renderer.setPixelRatio(window.devicePixelRatio);
-                renderer.setSize(window.innerWidth, window.innerHeight);
-                container.appendChild(renderer.domElement);
-
-                scene.add(new THREE.AmbientLight(0xffffff, 1.0));
-                const pointLight = new THREE.PointLight(0xffffff, 1.5, 100);
-                pointLight.position.set(0, 0, 25);
-                scene.add(pointLight);
-
-                cubesGroup = new THREE.Group();
-                linesGroup = new THREE.Group();
-                handLinesGroup = new THREE.Group();
-                const geometry = new THREE.BoxGeometry(1.5, 1.5, 1.5);
-                
-                // Generar los nodos de la red neuronal
-                const cubes = [];
-                for (let i = 0; i < CUBE_COUNT; i++) {
-                    const material = new THREE.MeshStandardMaterial({
-                        color: baseCubeColor, transparent: true, opacity: 0.3, metalness: 0.1, roughness: 0.6, emissive: blackColor
-                    });
-                    const cube = new THREE.Mesh(geometry, material);
-                    cube.position.set(
-                        (Math.random() - 0.5) * 20,
-                        (Math.random() - 0.5) * 20,
-                        (Math.random() - 0.5) * 20
-                    );
-                    cube.userData = { originalIndex: i, lastTriggered: 0, originalScale: cube.scale.clone(), baseColor: baseCubeColor.clone(), neighbors: [] };
-                    cubesGroup.add(cube);
-                    cubes.push(cube);
+            if (results.multiHandLandmarks) {
+                for (const landmarks of results.multiHandLandmarks) {
+                    drawConnectors(videoOverlayCtx, landmarks, HAND_CONNECTIONS, { color: '#00FF00', lineWidth: 5 });
+                    drawLandmarks(videoOverlayCtx, landmarks, { color: '#FF0000', lineWidth: 2 });
                 }
-                
-                // Generar las conexiones entre los nodos
-                const lineMaterial = new THREE.LineBasicMaterial({ color: baseLineColor, transparent: true, opacity: 0.5 });
-                for (let i = 0; i < CUBE_COUNT; i++) {
-                    for (let j = i + 1; j < CUBE_COUNT; j++) {
-                        const dist = cubes[i].position.distanceTo(cubes[j].position);
-                        if (dist < MAX_DISTANCE) {
-                            const lineGeometry = new THREE.BufferGeometry().setFromPoints([cubes[i].position, cubes[j].position]);
-                            const line = new THREE.Line(lineGeometry, lineMaterial);
-                            line.userData = { baseColor: baseLineColor.clone(), originalOpacity: line.material.opacity };
-                            linesGroup.add(line);
-                            // Almacenar vecinos para la propagación
-                            const neighborLink = { object: cubes[j], line: line, distance: dist };
-                            const thisLink = { object: cubes[i], line: line, distance: dist };
-                            cubes[i].userData.neighbors.push(neighborLink);
-                            cubes[j].userData.neighbors.push(thisLink);
-                        }
+            }
+            videoOverlayCtx.restore();
+        }
+        
+        // --- Funciones de Lógica de la Malla ---
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            initPoints();
+        }
+        
+        function initPoints() {
+            points.length = 0;
+            const xSpacing = canvas.width / (meshSize + 1);
+            const ySpacing = canvas.height / (meshSize + 1);
+            for (let i = 0; i < meshSize; i++) {
+                for (let j = 0; j < meshSize; j++) {
+                    const x = j * xSpacing + xSpacing;
+                    const y = i * ySpacing + ySpacing;
+                    points.push({
+                        x: x,
+                        y: y,
+                        originalX: x,
+                        originalY: y,
+                        amplitude: 0,
+                        hue: 0
+                    });
+                }
+            }
+        }
+        
+        function drawMesh() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.strokeStyle = '#333';
+            ctx.lineWidth = 1;
+        
+            for (let i = 0; i < meshSize; i++) {
+                for (let j = 0; j < meshSize; j++) {
+                    const index = i * meshSize + j;
+                    const p1 = points[index];
+        
+                    if (j < meshSize - 1) {
+                        const p2 = points[i * meshSize + j + 1];
+                        ctx.beginPath();
+                        ctx.moveTo(p1.x, p1.y);
+                        ctx.lineTo(p2.x, p2.y);
+                        ctx.stroke();
+                    }
+        
+                    if (i < meshSize - 1) {
+                        const p3 = points[(i + 1) * meshSize + j];
+                        ctx.beginPath();
+                        ctx.moveTo(p1.x, p1.y);
+                        ctx.lineTo(p3.x, p3.y);
+                        ctx.stroke();
                     }
                 }
-                scene.add(cubesGroup);
-                scene.add(linesGroup);
-                scene.add(handLinesGroup);
-                
-                // Normalizar la posición Z para mapear las notas
-                const minZ = cubes.reduce((min, cube) => Math.min(min, cube.position.z), Infinity);
-                const maxZ = cubes.reduce((max, cube) => Math.max(max, cube.position.z), -Infinity);
-                cubes.forEach(cube => {
-                    cube.userData.normalizedZ = (cube.position.z - minZ) / (maxZ - minZ);
+            }
+        
+            points.forEach(p => {
+                if (p.amplitude > 0.1) {
+                    const radius = Math.max(1, p.amplitude * 0.1);
+                    ctx.beginPath();
+                    ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
+                    const color = `hsl(${p.hue}, 100%, 50%)`;
+                    ctx.fillStyle = color;
+                    ctx.shadowBlur = 10;
+                    ctx.shadowColor = color;
+                    ctx.fill();
+                    ctx.shadowBlur = 0;
+                }
+            });
+        }
+        
+        function updateMesh() {
+            // Decaída de la onda para todos los puntos
+            points.forEach(p => {
+                p.amplitude *= 0.97;
+                p.y = p.originalY + p.amplitude * Math.sin(p.y * 0.1);
+            });
+            
+            // Si se detectan manos, aplicar una nueva perturbación
+            if (handsLandmarks.length > 0) {
+                if (oscillator) {
+                    const maxAmplitude = points.reduce((max, p) => Math.max(max, p.amplitude), 0);
+                    const volume = THREE.MathUtils.mapLinear(maxAmplitude, 0, 100, -30, -5);
+                    
+                    // Mapear el eje Y de la mano a una nota en la escala
+                    const noteIndex = Math.floor(THREE.MathUtils.mapLinear(handsLandmarks[0][8].y, 1, 0, 0, usePentatonicScale ? pentatonicScale.length - 1 : chromaticScale.length - 1));
+                    const scale = usePentatonicScale ? pentatonicScale : chromaticScale;
+                    const note = Tone.Midi(60 + scale[noteIndex]).toFrequency();
+
+                    oscillator.volume.rampTo(volume, 0.1);
+                    oscillator.frequency.rampTo(note, 0.1);
+                    
+                    const firstAffected = points.find(p => p.amplitude > 1);
+                    if (firstAffected) {
+                        const pan = THREE.MathUtils.mapLinear(firstAffected.originalX, 0, canvas.width, -1, 1);
+                        panner.pan.value = pan;
+                    }
+                }
+                handsLandmarks.forEach(hand => {
+                    const indexTip = hand[8];
+                    const clickX = indexTip.x * canvas.width;
+                    const clickY = indexTip.y * canvas.height;
+                    
+                    points.forEach(p => {
+                        const distance = Math.sqrt(Math.pow(clickX - p.originalX, 2) + Math.pow(clickY - p.originalY, 2));
+                        const amplitude = THREE.MathUtils.mapLinear(distance, 0, 200, 100, 0);
+                        p.amplitude = Math.max(p.amplitude, amplitude);
+                        p.hue = (Math.random() * 360);
+                    });
                 });
             }
-
-            // --- INICIALIZACIÓN DE TONE.JS ---
-            async function initTone() {
-                if (Tone.context.state !== 'running') {
-                    await Tone.start();
-                }
-                reverb = new Tone.Reverb({ decay: 5, wet: 0.5 }).toDestination();
-                audioMeter = new Tone.Meter();
-                isAudioInitialized = true;
+        }
+        
+        function animate() {
+            updateMesh();
+            drawMesh();
+            requestAnimationFrame(animate);
+        }
+        
+        // --- Lógica de arrastre y redimensionamiento de la ventana de video ---
+        let isDragging = false;
+        let isResizing = false;
+        let offsetX, offsetY;
+        
+        videoContainer.addEventListener('mousedown', (e) => {
+            const rect = videoContainer.getBoundingClientRect();
+            if (e.clientX > rect.right - 15 && e.clientY > rect.bottom - 15) {
+                isResizing = true;
+                e.preventDefault();
+            } else {
+                isDragging = true;
+                offsetX = e.clientX - rect.left;
+                offsetY = e.clientY - rect.top;
+                videoContainer.style.cursor = 'grabbing';
             }
-
-            function setupAudio(mode) {
-                if (currentSynth) { currentSynth.dispose(); }
-                const newSynth = synthModes[mode]();
-                
-                newSynth.chain(reverb, audioMeter, Tone.Destination);
-                currentSynth = newSynth;
-            }
-
-            // --- INICIALIZACIÓN DE MEDIAPIPE ---
-            async function createHandLandmarker() {
-                try {
-                    const vision = await FilesetResolver.forVisionTasks("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.9/wasm");
-                    handLandmarker = await HandLandmarker.createFromOptions(vision, {
-                        baseOptions: {
-                            modelAssetPath: `https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task`,
-                            delegate: "GPU"
-                        },
-                        runningMode: "VIDEO",
-                        numHands: 2,
-                        minHandDetectionConfidence: 0.6
-                    });
-                    startButton.disabled = false;
-                    startButton.textContent = "Iniciar Experiencia";
-                } catch (error) {
-                    console.error("Error al cargar modelo de MediaPipe:", error);
-                    startButton.textContent = "Error al Cargar";
-                    startButton.style.backgroundColor = 'red';
-                }
-            }
-
-            let lastPredictTime = 0;
-            function predictWebcam() {
-                animationFrameId = requestAnimationFrame(predictWebcam);
-                if (!videoStream || videoElement.readyState < 2 || !handLandmarker) {
-                    return;
-                }
-                const now = performance.now();
-                if (now - lastPredictTime > PREDICTION_INTERVAL) {
-                    const results = handLandmarker.detectForVideo(videoElement, now);
-                    latestHandLandmarks = results.landmarks;
-                    
-                    canvasCtx.save();
-                    canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
-                    updateHandStatus(latestHandLandmarks.length);
-
-                    // Dibuja el esqueleto de la mano en la ventana de la cámara
-                    if (latestHandLandmarks.length > 0) {
-                        canvasCtx.save();
-                        canvasCtx.scale(-1, 1);
-                        canvasCtx.translate(-canvasElement.width, 0);
-                        const drawingUtils = new DrawingUtils(canvasCtx);
-                        latestHandLandmarks.forEach((landmarks, i) => {
-                            const handedness = results.handednesses[i][0].categoryName;
-                            const isRightHand = handedness === 'Right';
-                            drawingUtils.drawLandmarks(landmarks, { color: isRightHand ? "#FF0000" : "#0000FF", lineWidth: 2, radius: 4 });
-                            drawingUtils.drawConnectors(landmarks, HandLandmarker.HAND_CONNECTIONS, { color: "#FFFFFF", lineWidth: 2 });
-                        });
-                        canvasCtx.restore();
-                    }
-                    canvasCtx.restore();
-                    lastPredictTime = now;
-                }
-            }
-            
-            let animateFrameId = null;
-            function animate() {
-                animateFrameId = requestAnimationFrame(animate);
-                
-                try {
-                    if (!isGrabbing) {
-                        cubesGroup.rotation.y += ROTATION_SPEED;
-                        cubesGroup.rotation.x += ROTATION_SPEED / 2;
-                    }
-                    
-                    processHandInteraction();
-                    processPropagationQueue();
-                    updateAudioMeter();
-
-                    // Animar los efectos de brillo y escala de los cubos y líneas
-                    activeEffects.forEach(effect => {
-                        effect.life -= 0.015; // Velocidad de desvanecimiento
-                        const t = Math.min(1, 1 - effect.life); // progresión
-                        
-                        // Efecto del cubo
-                        effect.cube.scale.lerpVectors(effect.initialScale, effect.targetScale, t);
-                        effect.cube.material.color.lerpColors(effect.initialColor, effect.targetColor, t);
-                        effect.cube.material.emissiveIntensity = effect.life * 2;
-
-                        // Efecto de la línea
-                        if (effect.line) {
-                            effect.line.material.color.lerpColors(baseLineColor, effect.targetColor, Math.pow(1 - t, 2));
-                            effect.line.material.opacity = effect.life;
-                        }
-
-                        if (effect.life <= 0) {
-                            effect.cube.scale.copy(effect.cube.userData.originalScale);
-                            effect.cube.material.color.copy(effect.cube.userData.baseColor);
-                            effect.cube.material.emissiveIntensity = 0;
-                            if (effect.line) {
-                                effect.line.material.color.copy(baseLineColor);
-                                effect.line.material.opacity = effect.line.userData.originalOpacity;
-                            }
-                            activeEffects.delete(effect.uuid);
-                        }
-                    });
-
-                    renderer.render(scene, camera);
-                } catch (e) {
-                    console.error("Error en el bucle de animación:", e);
-                }
-            }
-
-            // Lógica de propagación de efectos
-            function processPropagationQueue() {
-                const now = Date.now();
-                const nextQueue = [];
-                propagationQueue.forEach(item => {
-                    const nextTriggerTime = item.lastTriggered + (item.distance * PROPAGATION_SPEED);
-                    if (now >= nextTriggerTime) {
-                        activateCubeEffect(item.cube, item.life, item.line);
-                         if (item.life > 0.5) {
-                            item.cube.userData.neighbors.forEach(neighbor => {
-                                nextQueue.push({
-                                    cube: neighbor.object,
-                                    line: neighbor.line,
-                                    lastTriggered: now,
-                                    distance: neighbor.distance,
-                                    life: item.life - 0.2
-                                });
-                            });
-                         }
-                    } else {
-                        nextQueue.push(item);
-                    }
-                });
-                propagationQueue.length = 0; // Limpiar la cola actual
-                propagationQueue.push(...nextQueue);
-            }
-
-            function activateCubeEffect(cube, life = 1.0, line = null) {
-                 const now = Date.now();
-                 if (now - cube.userData.lastTriggered < NOTE_COOLDOWN && activeEffects.has(cube.uuid)) return;
-
-                 const noteIndex = Math.min(Math.floor(cube.userData.normalizedZ * musicalScale.length), musicalScale.length - 1);
-                 const note = musicalScale[noteIndex];
-                 if (currentSynth) {
-                     currentSynth.triggerAttackRelease(note, "8n");
-                 }
-                 
-                 const randomColor = colorPalette[Math.floor(Math.random() * colorPalette.length)];
-                 const targetScale = cube.userData.originalScale.clone().multiplyScalar(1.5);
-                 
-                 const effect = {
-                     uuid: cube.uuid,
-                     cube: cube,
-                     line: line,
-                     initialScale: cube.scale.clone(),
-                     targetScale: targetScale,
-                     initialColor: cube.material.color.clone(),
-                     targetColor: randomColor,
-                     life: life
-                 };
-                 activeEffects.set(cube.uuid, effect);
-                 cube.userData.lastTriggered = now;
-            }
-
-            // --- LÓGICA DE INTERACCIÓN Y CÁMARA ---
-            async function getWebcam() {
-                try {
-                    videoStream = await navigator.mediaDevices.getUserMedia({
-                        video: {
-                            width: { ideal: 640 },
-                            height: { ideal: 480 },
-                            facingMode: "user"
-                        }
-                    });
-                    videoElement.srcObject = videoStream;
-                    videoElement.onloadeddata = () => {
-                        videoElement.play();
-                        canvasElement.width = videoElement.videoWidth;
-                        canvasElement.height = videoElement.videoHeight;
-                        predictWebcam();
-                    };
-                } catch (error) {
-                    console.error("Error al acceder a la cámara:", error);
-                    startButton.textContent = "Error de Cámara";
-                    startButton.disabled = true;
-                }
-            }
-            
-            function processHandInteraction() {
-                // Clear previous hand lines
-                handLinesGroup.children.forEach(line => line.geometry.dispose());
-                handLinesGroup.clear();
-
-                if (!latestHandLandmarks || latestHandLandmarks.length === 0) {
-                    return;
-                }
-                
-                // Mapeo de conexiones para el esqueleto de la mano
-                const connections = [
-                    [0, 1], [1, 2], [2, 3], [3, 4], // Pulgar
-                    [0, 5], [5, 6], [6, 7], [7, 8], // Índice
-                    [0, 9], [9, 10], [10, 11], [11, 12], // Medio
-                    [0, 13], [13, 14], [14, 15], [15, 16], // Anular
-                    [0, 17], [17, 18], [18, 19], [19, 20]  // Meñique
-                ];
-                
-                // Procesa cada mano detectada
-                latestHandLandmarks.forEach((landmarks, handIndex) => {
-                    // Dibuja la silueta de la mano en la escena principal
-                    const points = [];
-                    const scaleFactor = 30; // Ajusta este valor para escalar la silueta
-                    const offset = new THREE.Vector3(
-                        (videoElement.videoWidth / 2) - (window.innerWidth / 2),
-                        (videoElement.videoHeight / 2) - (window.innerHeight / 2),
-                        0
-                    );
-                    landmarks.forEach(landmark => {
-                        points.push(new THREE.Vector3(
-                            (landmark.x - 0.5) * -window.innerWidth,
-                            (landmark.y - 0.5) * -window.innerHeight,
-                            HAND_LINE_Z_POSITION
-                        ));
-                    });
-                    
-                    connections.forEach(conn => {
-                        const p1 = points[conn[0]];
-                        const p2 = points[conn[1]];
-                        const geometry = new THREE.BufferGeometry().setFromPoints([p1, p2]);
-                        const material = new THREE.LineBasicMaterial({ color: handLineColor });
-                        const line = new THREE.Line(geometry, material);
-                        handLinesGroup.add(line);
-                    });
-
-                    // El índice 8 es la punta del dedo índice
-                    const indexFingerTip = landmarks[8];
-                    
-                    // Mapear las coordenadas de la cámara a coordenadas 3D de la escena
-                    raycaster.setFromCamera(handPointers[handIndex].set(
-                        (indexFingerTip.x * 2) - 1, 
-                        (indexFingerTip.y * 2) - 1
-                    ), camera);
-                    
-                    const intersects = raycaster.intersectObjects(cubesGroup.children);
-                    if (intersects.length > 0) {
-                        const intersectedCube = intersects[0].object;
-                        const now = Date.now();
-                        
-                        // Si ha pasado suficiente tiempo desde la última vez que se activó
-                        if (now - intersectedCube.userData.lastTriggered > NOTE_COOLDOWN) {
-                            
-                            // Activar el efecto visual y de audio
-                            activateCubeEffect(intersectedCube);
-                            
-                            // Propagar el efecto a los vecinos
-                            intersectedCube.userData.neighbors.forEach(neighbor => {
-                                propagationQueue.push({
-                                    cube: neighbor.object,
-                                    line: neighbor.line,
-                                    lastTriggered: now,
-                                    distance: neighbor.distance,
-                                    life: 1.0 // Fuerza inicial
-                                });
-                            });
-                        }
-                    }
-                });
-            }
-
-            function updateHandStatus(count) {
-                if (count > 0) {
-                    handStatusIndicator.style.backgroundColor = '#34d399';
-                    handStatusText.textContent = `Se detectan ${count} mano${count > 1 ? 's' : ''}`;
-                } else {
-                    handStatusIndicator.style.backgroundColor = '#ef4444';
-                    handStatusText.textContent = 'No se detectan manos';
-                }
-            }
-
-            function updateAudioMeter() {
-                if (!audioMeter) return;
-                const level = Tone.dbToGain(audioMeter.getValue());
-                const activeBars = Math.floor(level * audioLevelBars.length);
-                audioLevelBars.forEach((bar, i) => {
-                    bar.classList.toggle('active', i < activeBars);
-                });
-            }
-
-            // --- LISTENERS DE EVENTOS ---
-
-            // Transición de la pantalla de bienvenida a la de inicio
-            continueButton.addEventListener('click', () => {
-                welcomeScreen.style.opacity = 0;
-                setTimeout(() => {
-                    welcomeScreen.style.display = 'none';
-                    startScreen.style.display = 'flex';
-                    setTimeout(() => startScreen.style.opacity = 1, 10);
-                }, 500);
-            });
-
-            // Iniciar la experiencia
-            startButton.addEventListener('click', async () => {
-                overlay.style.opacity = 0;
-                setTimeout(async () => {
-                    overlay.style.display = 'none';
-                    controlsPanel.style.display = 'block';
-                    menuButton.style.display = 'block';
-                    cameraContainer.style.display = 'block';
-                    animate();
-                    // Iniciar Tone.js después de la interacción del usuario
-                    await initTone();
-                    setupAudio(modeSelect.value);
-                }, 800);
-            });
-
-            // Reiniciar la vista 3D
-            resetBtn.addEventListener('click', () => {
-                cubesGroup.rotation.set(0, 0, 0);
-            });
-
-            // Detener la experiencia
-            stopBtn.addEventListener('click', () => {
-                cancelAnimationFrame(animateFrameId);
-                cancelAnimationFrame(animationFrameId);
-                if (videoStream) {
-                    videoStream.getTracks().forEach(track => track.stop());
-                }
-                controlsPanel.style.display = 'none';
-                menuButton.style.display = 'none';
-                cameraContainer.style.display = 'none';
-                overlay.style.display = 'flex';
-                welcomeScreen.style.display = 'flex';
-                startScreen.style.display = 'none';
-                startButton.disabled = true;
-                startButton.textContent = "Iniciando...";
-                setTimeout(() => {
-                    overlay.style.opacity = 1;
-                    welcomeScreen.style.opacity = 1;
-                    createHandLandmarker();
-                }, 10);
-            });
-
-            // Minimizar/Maximizar el panel de control
-            minimizeBtn.addEventListener('click', () => {
-                controlsPanel.classList.add('minimized');
-                menuButton.style.display = 'block';
-            });
-            menuButton.addEventListener('click', () => {
-                controlsPanel.classList.remove('minimized');
-                menuButton.style.display = 'none';
-            });
-            
-            // Sliders para control de volumen y reverberación
-            volumeSlider.addEventListener('input', (e) => {
-                if (Tone.Destination) {
-                    Tone.Destination.volume.value = Tone.gainToDb(parseFloat(e.target.value) / 100);
-                }
-                volumeValueSpan.textContent = `${e.target.value}%`;
-            });
-
-            reverbSlider.addEventListener('input', (e) => {
-                if (reverb) {
-                    reverb.wet.value = parseFloat(e.target.value) / 100;
-                }
-                reverbValueSpan.textContent = `${e.target.value}%`;
-            });
-            
-            modeSelect.addEventListener('change', (e) => {
-                setupAudio(e.target.value);
-            });
-
-            // Lógica para el arrastre del panel y la cámara
-            function startDrag(e) {
-                const target = e.target.closest('.draggable');
-                if (target) {
-                    e.preventDefault();
-                    dragState.isDragging = true;
-                    dragState.target = target;
-                    dragState.target.classList.add('dragging');
-                    dragState.startX = e.clientX || e.touches[0].clientX;
-                    dragState.startY = e.clientY || e.touches[0].clientY;
-                    dragState.initialLeft = target.offsetLeft;
-                    dragState.initialTop = target.offsetTop;
-                }
-            }
-
-            function drag(e) {
-                if (!dragState.isDragging) return;
-                const clientX = e.clientX || e.touches[0].clientX;
-                const clientY = e.clientY || e.touches[0].clientY;
-                const dx = clientX - dragState.startX;
-                const dy = clientY - dragState.startY;
-                dragState.target.style.left = `${dragState.initialLeft + dx}px`;
-                dragState.target.style.top = `${dragState.initialTop + dy}px`;
-            }
-
-            function endDrag() {
-                if (dragState.isDragging) {
-                    dragState.isDragging = false;
-                    dragState.target.classList.remove('dragging');
-                }
-            }
-
-            controlsPanelHandle.addEventListener('mousedown', startDrag);
-            cameraContainer.addEventListener('mousedown', startDrag);
-            
-            window.addEventListener('mousemove', drag);
-            window.addEventListener('mouseup', endDrag);
-
-            controlsPanelHandle.addEventListener('touchstart', startDrag, { passive: false });
-            cameraContainer.addEventListener('touchstart', startDrag, { passive: false });
-            
-            window.addEventListener('touchmove', drag, { passive: false });
-            window.addEventListener('touchend', endDrag);
-
-            // Escuchadores de eventos para el movimiento de la cámara con el mouse
-            container.addEventListener('mousedown', (event) => {
-                isGrabbing = true;
-                container.classList.add('grabbing');
-                previousMousePosition.x = event.clientX;
-                previousMousePosition.y = event.clientY;
-            });
-            
-            window.addEventListener('mouseup', () => {
-                isGrabbing = false;
-                container.classList.remove('grabbing');
-            });
-            
-            container.addEventListener('mousemove', (event) => {
-                if (!isGrabbing) return;
-                const deltaX = event.clientX - previousMousePosition.x;
-                const deltaY = event.clientY - previousMousePosition.y;
-                
-                cubesGroup.rotation.y += deltaX * 0.005;
-                cubesGroup.rotation.x += deltaY * 0.005;
-                
-                previousMousePosition.x = event.clientX;
-                previousMousePosition.y = event.clientY;
-            });
-
-            // Manejar cambios en el tamaño de la ventana
-            window.addEventListener('resize', () => {
-                camera.aspect = window.innerWidth / window.innerHeight;
-                camera.updateProjectionMatrix();
-                renderer.setSize(window.innerWidth, window.innerHeight);
-            });
-
-            // Iniciar la aplicación
-            initThree();
-            createHandLandmarker();
-            getWebcam();
         });
+
+        document.addEventListener('mousemove', (e) => {
+            if (isResizing) {
+                let newWidth = e.clientX - videoContainer.getBoundingClientRect().left;
+                let newHeight = newWidth * 0.75; // Proporción 4:3
+                
+                // Limitar el tamaño mínimo
+                newWidth = Math.max(100, newWidth);
+                newHeight = Math.max(75, newHeight);
+
+                videoContainer.style.width = `${newWidth}px`;
+                videoContainer.style.height = `${newHeight}px`;
+                
+                // Actualizar el tamaño del canvas de superposición
+                videoOverlayCanvas.style.width = `${newWidth}px`;
+                videoOverlayCanvas.style.height = `${newHeight}px`;
+
+            } else if (isDragging) {
+                let newX = e.clientX - offsetX;
+                let newY = e.clientY - offsetY;
+                
+                newX = Math.max(0, Math.min(newX, window.innerWidth - videoContainer.offsetWidth));
+                newY = Math.max(0, Math.min(newY, window.innerHeight - videoContainer.offsetHeight));
+                
+                videoContainer.style.left = `${newX}px`;
+                videoContainer.style.top = `${newY}px`;
+            }
+        });
+
+        document.addEventListener('mouseup', () => {
+            isDragging = false;
+            isResizing = false;
+            videoContainer.style.cursor = 'move';
+        });
+        
+        // --- Event Listeners ---
+        canvas.addEventListener('click', (event) => {
+            const mouseX = event.clientX;
+            const mouseY = event.clientY;
+            
+            points.forEach(p => {
+                const distance = Math.sqrt(Math.pow(mouseX - p.originalX, 2) + Math.pow(mouseY - p.originalY, 2));
+                const amplitude = Math.sin(distance / 50) * 100;
+                p.amplitude = amplitude;
+                p.hue = (Math.random() * 360);
+            });
+        });
+        
+        startButton.addEventListener('click', () => {
+            setupAudio();
+            startCamera();
+            startOverlay.style.display = 'none';
+            animate();
+        });
+        
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
     </script>
 </body>
 </html>
