@@ -3,13 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Malla de Gravedad Sonora Interactiva</title>
+    <title>Gravedad Sonora</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/tone@14.7.58/build/Tone.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <style>
         body {
             background-color: #000;
@@ -17,6 +18,35 @@
             font-family: sans-serif;
             margin: 0;
             overflow: hidden;
+        }
+        .screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            text-align: center;
+            z-index: 10;
+            transition: opacity 1s ease-in-out;
+        }
+        #welcome-screen {
+            background-color: #000;
+        }
+        #instructions-screen {
+            display: none;
+            background-color: #000;
+        }
+        #interactive-screen {
+            display: none;
+            position: relative;
+        }
+        .hidden {
+            opacity: 0;
+            pointer-events: none;
         }
         .gravity-mesh-container {
             width: 100vw;
@@ -30,28 +60,13 @@
             display: block;
             background-color: #000;
         }
-        .instructions {
+        .instructions-text {
             position: absolute;
             bottom: 20px;
             text-align: center;
             width: 100%;
             font-size: 0.9rem;
             color: rgba(255, 255, 255, 0.7);
-        }
-        .start-overlay {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0, 0, 0, 0.8);
-            backdrop-filter: blur(5px);
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            flex-direction: column;
-            text-align: center;
-            z-index: 10;
         }
         .draggable-video-container {
             position: fixed;
@@ -91,48 +106,366 @@
                 top: 10px;
             }
         }
+        
+        #logo-svg {
+            width: 200px;
+            height: auto;
+            margin-bottom: 2rem;
+            opacity: 0;
+            animation: fade-in 1.5s ease-out forwards;
+        }
+        @keyframes fade-in {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        .title {
+            font-size: 3.9rem;
+            font-weight: bold;
+            margin-bottom: 1rem;
+            opacity: 0;
+            animation: slide-up 1.5s ease-out 1s forwards;
+        }
+        .ai-quote {
+            font-style: italic;
+            font-size: 1.2rem;
+            margin-bottom: 2rem;
+            max-width: 600px;
+            opacity: 0;
+            animation: fade-in 1.5s ease-out 2s forwards;
+        }
+        @keyframes slide-up {
+            from { transform: translateY(20px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+        .fade-in {
+            opacity: 0;
+            animation: fade-in 1s ease-in-out forwards;
+        }
+        .pulse-animation {
+            animation: pulse 2s infinite ease-in-out;
+        }
+        @keyframes pulse {
+            0%, 100% {
+                transform: scale(1);
+            }
+            50% {
+                transform: scale(1.05);
+            }
+        }
+        .button {
+            padding: 12px 24px;
+            background-color: #2563eb;
+            color: white;
+            border-radius: 9999px;
+            font-weight: bold;
+            transition: background-color 0.3s, transform 0.3s;
+            box-shadow: 0 4px 14px rgba(0, 0, 0, 0.2);
+            margin: 1rem;
+        }
+        .button:hover {
+            background-color: #1d4ed8;
+            transform: scale(1.05);
+        }
+        .instructions-list {
+            list-style: none;
+            padding: 0;
+            margin: 2rem 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .instructions-list li {
+            display: flex;
+            align-items: center;
+            margin-bottom: 1rem;
+            background: rgba(255, 255, 255, 0.1);
+            padding: 0.75rem 1.5rem;
+            border-radius: 12px;
+            max-width: 400px;
+            width: 90%;
+            text-align: left;
+        }
+        .instructions-list li .icon {
+            font-size: 2rem;
+            margin-right: 1rem;
+            color: #2563eb;
+        }
+        
+        .whatsapp-button {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background-color: #25D366;
+            color: white;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 1.5rem;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            transition: transform 0.3s;
+            z-index: 30;
+        }
+        .whatsapp-button:hover {
+            transform: scale(1.1);
+        }
+
+        .controls-container {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 1rem;
+            background: rgba(0, 0, 0, 0.5);
+            padding: 0.5rem 1rem;
+            border-radius: 12px;
+            z-index: 30;
+            align-items: center;
+        }
+
+        .control-button {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            padding: 0.5rem;
+            border-radius: 8px;
+            transition: background 0.3s;
+        }
+
+        .control-button:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+        
+        .volume-control {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
     </style>
 </head>
 <body>
-    <div class="gravity-mesh-container">
-        <canvas id="gravityMeshCanvas"></canvas>
-        <div id="start-overlay" class="start-overlay">
-            <h1 class="text-3xl font-bold mb-4">Malla de Gravedad Sonora</h1>
-            <p class="mb-6">Haz clic para comenzar y crea ondas sonoras en la malla. También puedes usar tus manos.</p>
-            <button id="startButton" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-full transition-colors">
-                Comenzar
-            </button>
-        </div>
-        <div class="instructions">
-            Usa tus manos para interactuar con la malla. La onda visual está sincronizada con el tono del sonido.
-        </div>
+    <!-- Pantalla de Bienvenida -->
+    <div id="welcome-screen" class="screen">
+        <h1 class="title">Gravedad Sonora</h1>
+        <svg id="logo-svg" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px"
+             viewBox="0 0 1011 197.4" xml:space="preserve">
+            <style type="text/css">
+                .st0{fill:#FFFFFF;}
+            </style>
+            <g>
+                <path class="st0" d="M981.7,21.4c-6.2-6.2-13.6-9.2-22.3-9.2h-13.7v27.1h20.9v119h-20.9v27.1h13.7c8.7,0,16.1-3.1,22.3-9.2
+                    c6.2-6.2,9.2-13.6,9.2-22.3V43.6C991,34.9,987.9,27.5,981.7,21.4z"/>
+                <path class="st0" d="M29.3,21.4C23.1,27.5,20,34.9,20,43.6v110.1c0,8.7,3.1,16.1,9.2,22.3c6.2,6.2,13.6,9.2,22.3,9.2h13.7v-27.1
+                    H44.4v-119h20.9V12.1H51.5C42.9,12.1,35.4,15.2,29.3,21.4z"/>
+                <path class="st0" d="M278.6,86.6c2.6-3.7,4.6-6.5,5.9-8.7c4-6.3,4.6-10.8,2-13.4c-0.7-0.5-1.6-0.7-2.7-0.7c-1.7,0-4.1,0.8-7.3,2.5
+                    c-9.1,8.1-15.6,13.9-19.5,17.4c-4,3.5-8.7,7.4-14.1,11.8c-5.4,4.4-10.8,8.7-16.3,12.8c-1.4,0.8-2.9,1.7-4.6,2.6
+                    c-1.2,0.6-2.2,1-3,1.2c-2.8-1.9-3.5-4.8-2.4-8.9c1.2-4.1,3.6-9.5,7.2-16.5c1.1-1.5,2.1-3,2.9-4.3c0.9-1.4,1.8-2.9,2.8-4.5
+                    c3.6-5.7,3.3-9.3-1-10.8c-3.2,0-5.9,0.8-8.1,2.3c-2.8,2.7-5.5,6.1-8.1,10.2l-3.4,5.5c-1.3,2.1-2.5,3.8-3.5,4.9
+                    c-1.9,2.9-4.7,7.3-8.6,13.1c-3.9,5.8-6.8,10.2-8.6,13.1c-3,4.8-5.6,9.5-7.8,13.9c-2.2,4.5-3.7,8.6-4.4,12.5
+                    c-0.4,3.1,1.3,4.6,5.2,4.6c1.3,0,2.6-0.3,3.7-0.9c1.1-0.6,2-1.1,2.6-1.5c0.6-0.4,1.3-1,2.1-1.9c1.7-3,3.1-6,4.2-8.8
+                    c1.2-2.8,2.3-5.3,3.3-7.4c1-2.1,2.2-4.2,3.5-6.3l1.3-2.1c1.3,5.3,5,7.9,11.1,7.9c1.4,0.2,3.4,0,6-0.7c7.8-3.9,14.8-8.2,20.9-12.9
+                    c6.1-4.7,10.5-8.2,13.1-10.4c-1.1,1.5-2.2,3.1-3.2,4.7c-1.1,1.6-2.2,3.4-3.5,5.4c-1.7,2.7-2.9,4.7-3.6,6l-4.8,7.6
+                    c-3.6,5.6-5.1,10.1-4.8,13.2c1,0.8,1.9,1.2,2.9,1.2c0.9,0.1,3.5-0.7,7.8-2.5c0.8-0.3,2.9-2.9,6.1-7.6c3.2-4.7,10.9-16.7,23.1-36.2
+                    C274.2,92.8,276,90.2,278.6,86.6z"/>
+                <path class="st0" d="M326.5,110c0.5-0.8,0.9-2.7,1.3-5.6c-0.5-1.2-1.2-1.8-2.1-1.7h-8.9l1.3-20.4c0-3.1-0.1-5.1-0.4-6
+                    c-0.6-2-1.9-3-4-3c-1.3,0-2.7,0.2-4.2,0.7c-1.6,0.6-2.8,1.4-3.6,2.2c-7.9,9.1-15.9,18.1-23.8,27.1c-13.4,15.8-20.1,25.5-20.1,29
+                    c0,4.2,1.7,6.2,5.2,6.2c2.4,0,4.5-1.5,6.3-4.4c1.7-2.9,3.3-5.7,5-8.5c0.3-0.4,1.3-2.1,2.9-5c1.4-2.5,2.2-3.7,2.4-3.8
+                    c2.7-1,6.6-2,11.8-2.9c4.1-0.7,6.6-1.1,7.5-1.1c0.3,0,0.4,0.2,0.4,0.5c0,0.4,0,0.6,0.1,0.7c0,0.1-0.1,1.4-0.3,3.9
+                    c-0.2,2.8-0.3,5.3-0.3,7.4c0,8.8,1.5,13.2,4.3,13.2c2,0,3.6-2.2,5-6.7c1-3.2,1.8-7.4,2.4-12.7c0.3-2.6,0.5-5.2,0.8-7.7
+                    c0.5,0.2,1.4,0.2,2.7,0c1.6-0.2,2.4-0.3,2.3-0.3c0.6,0,1.2,0,2,0.1c0.8,0.1,1.3,0.1,1.6,0.1C325.2,111.3,326,110.9,326.5,110z
+                    M291.5,105.4c1.6-2.5,3.2-5.1,4.9-7.6c2.2-3.3,4-5.7,5.6-7.2c0.8,1,1.3,2.8,1.5,5.3c0.2,2.1,0.3,4.2,0.5,6.2L291.5,105.4z"/>
+                <path class="st0" d="M421,75.1c0-2.1-1.2-4.7-3.6-7.7h-3.7c-1.3,5.2-2.6,10.3-3.8,15.5c-2.7,10.5-5.4,18.8-8,25
+                    c-3.6,8.8-7,13.2-10.1,13.2c-1.1,0-1.9-0.4-2.2-1.1c-0.3-0.5-0.4-1.6-0.4-3.3c0-0.7,1.1-6.8,3.3-18.4c2.2-11.5,3.2-17.7,3.2-18.4
+                    c0-3.2-0.8-5.9-2.4-7.9c-1.5-1.9-3.5-2.8-5.9-3c0,0,0-0.1,0-0.1c-0.4-1.4-1.2-2-2.4-2c-2.9,0-6,3.8-9.3,11.5
+                    c-0.7,1.8-2.3,6.3-4.6,13.4c-3.7,11.3-6.7,19.7-9.2,25.2c-1.2-1.4-2.1-2.5-2.6-3.1c-1.3-16.9-4.2-30.2-8.9-39.9
+                    c-0.3,0.1-1.5,0.3-3.4,0.7c-1.3,0.2-2.1,0.5-2.5,1c-2.4,3.3-5,8.2-7.8,14.8c-4.6,10.9-7.9,19.3-9.8,25.4c-0.8,2.4-1.1,5.1-1.1,8
+                    c0,2,0.4,3.8,1.1,5.4c1,2.2,2.5,3.4,4.4,3.4c0.8,0,1.9-0.6,3.3-1.9c1.5-1.3,2.3-2.5,2.5-3.6c3.1-14.5,5.9-25.2,8.6-32.3
+                    c0.9,3.4,1.9,6.9,2.8,10.4c2,6.9,3.9,12.3,5.8,16.4c2.6,5.7,5.1,8.5,7.4,8.5c2.6,0,6.1-4.6,10.5-13.7c3.3-7,6.6-15.3,9.8-24.9
+                    c0,0.6-0.1,1.2-0.1,1.8c-0.8,9.5-1.2,14.6-1.2,15.1c0,3.8,0.7,8.2,2.1,13.4c1.9,7.5,4.6,11.2,8,11.2c5,0,10-4.4,15.1-13.3
+                    c4-7,7.7-15.7,10.9-26.2C419.6,84.5,421,78.3,421,75.1z"/>
+                <path class="st0" d="M454.3,115.5c-0.7-0.5-1.8-0.7-3.3-0.7c-0.5,0-3.7,1.4-9.5,4.1c-5.8,2.7-9,4.1-9.5,4.1c-2.4,0-4-0.3-4.8-0.8
+                    c1.1-6.7,3-11.2,5.7-13.5c2-1.8,6-3,11.9-3.9c9-1.3,16-2.7,20.9-4c0.2-0.5,0.4-1.1,0.4-1.6c0-1.3-0.7-2.4-2.1-3.2
+                    c-1.4-0.8-2.9-1.2-4.4-1.2c-2,0-6.1,0.3-12.4,0.9c-6,0.6-10.3,0.9-12.9,0.8l0.1-3.5c0-4.3,1.1-7.2,3.4-8.7c1.6-1.1,4.2-1.7,7.8-1.7
+                    h1.9c0.8,0.1,1.5,0.1,1.9,0.1c1.8,0,3.2-0.1,4.3-0.3l1-3.7c-1.9-2.9-3.9-4.7-6-5.3c-1-0.3-3.3-0.5-6.9-0.5c-7,0-11.2,0.9-12.6,2.6
+                    c-1.3,1.4-3.7,8.9-7.4,22.5c-3.9,14.4-5.8,24.2-5.8,29.6c0,4.2,0.9,7.1,2.6,8.9c1.5,1.5,4,2.2,7.3,2.2c4.8,0,10.8-2,18-5.9
+                    c7.5-4.2,12.2-8.4,14-12.7C456.7,117.6,455.5,116.1,454.3,115.5z"/>
+                <path class="st0" d="M498.2,115.8c-10.3-0.8-24.4,2.3-25.3,2.5c5.2-16.6,18.2-43.2,16.3-47.9c-0.5-1.3-2-2.3-2.8-2.3
+                    c-1.9,0-3.8,0.9-4.7,3.3c-4.4,11.7-12.4,27.6-15.6,37.1c-1.2,3.4-4.1,9.3-5.8,14.5c-1.6,4.5-2.4,6.8-2.4,7c0,1.8,0.4,3,1.3,3.5
+                    c0.6,0.4,1.6,0.6,3.1,0.6c3.1,0,7.8-0.9,14.2-2.6c6.4-1.7,12-2.6,17-2.6c3.3,0,6.3,0.3,9,1.1c2.7,0.7,4,1.1,3.9,1.1
+                    c1.1,0,2.2-1.3,3.4-3.8c1.1-2.2,1.7-3.8,1.7-4.8C511.5,119.3,507.1,116.5,498.2,115.8z"/>
+                <path class="st0" d="M600.7,84.8c1.9-4.9,1.6-9.4-1.1-13.5c-2.2-3.5-5.1-5.5-8.6-6.2c-0.5-0.1-1-0.2-1.4-0.2
+                    c-5.7,0-13.3,1.4-22.7,4.3c-0.1-1.4-0.2-2.8-0.3-4.1c-0.1-1.4-0.6-2.1-1.6-2.3c-0.2-0.1-0.5-0.1-0.6-0.1c-0.1,0-0.2,0-0.2,0
+                    c-2.1,1.4-3.6,2.3-4.5,2.9c-1.1,1.3-2.3,3.2-3.6,5.6c-0.9,1.8-1.9,3.6-2.8,5.4c-4.7,8.5-8,14.8-10.2,18.9
+                    c-12.9,23.2-21.3,38-22.1,39.9c-0.8,2-0.9,4-0.3,6c0.5,2,5.4,1.9,8,0.4c0.6-0.4,1.4-0.5,2.5-1.9c0.9-1.2,1.5-2.1,1.7-2.8
+                    c0,0,13.7-28.9,15.6-31.4c1.8-0.2,16.2-0.3,18-0.4c9-0.5,15.7-2,21.9-6.1C594.3,95.3,598.5,90.5,600.7,84.8z M573.6,94.3
+                    c-4.4,0.6-13.3,1.7-17.4,1.7c-1.4,0-2.3-0.1-2.1-0.5c0.5-1.3,8-14.4,8.8-14.8c8.3-3.7,18.9-4.2,19.8-4c5.3,1.1,7.2,3.5,5.7,7.5
+                    C587.5,86.4,582.4,93.1,573.6,94.3z"/>
+                <path class="st0" d="M630.8,114.8c1.1,0,1.8-0.4,2.3-1.2c0.4-0.8,0.9-2.6,1.3-5.4c-0.5-1.2-1.2-1.7-2-1.7h-8.6l1.2-19.7
+                    c0-3-0.1-5-0.4-5.8c-0.5-2-1.8-2.9-3.9-2.9c-1.2,0-2.6,0.2-4,0.7c-1.6,0.6-2.7,1.3-3.5,2.1c-7.6,8.7-15.3,17.4-23,26.2
+                    c-12.9,15.3-19.4,24.6-19.4,28c0,4,1.7,6,5,6c2.3,0,4.3-1.4,6.1-4.3c1.6-2.7,3.2-5.5,4.8-8.3c0.3-0.4,1.2-2,2.8-4.8
+                    c1.3-2.4,2.1-3.6,2.3-3.6c2.6-1,6.4-2,11.3-2.9c3.9-0.7,6.3-1,7.2-1c0.3,0,0.4,0.2,0.4,0.5c0,0.3,0,0.6,0.1,0.7
+                    c0,0.1-0.1,1.4-0.3,3.8c-0.2,2.7-0.3,5.1-0.3,7.2c0,8.5,1.4,12.8,4.2,12.8c1.9,0,3.5-2.2,4.8-6.5c0.9-3.1,1.7-7.2,2.3-12.3
+                    c0.3-2.5,0.5-5,0.8-7.5c0.5,0.2,1.4,0.2,2.6,0c1.6-0.2,2.3-0.3,2.2-0.3c0.5,0,1.2,0,2,0.1c0.8,0.1,1.3,0.1,1.5,0.1c1.1,0,1.8-0.4,2.3-1.2
+                    C630.3,112.8,630.6,111,630.8,114.8z M599.4,109.1c1.6-2.4,9.2-12.2,10.7-13.6c0.8,0.9,0.6,2,0.8,4.5c0.2,2,0.3,4,0.5,6L599.4,109.1z"/>
+                <path class="st0" d="M736.7,108.2c-0.5-1.2-1.2-1.7-2-1.7h-8.6l1.2-19.7c0-3-0.1-5-0.4-5.8c-0.5-2-1.8-2.9-3.9-2.9
+                    c-1.2,0-2.6,0.2-4,0.7c-1.5,0.6-2.7,1.3-3.5,2.1c-7.6,8.7-15.3,17.4-23,26.2c-5.9,7-10.5,12.7-13.7,17.2c-1-2.5-5.1-4.7-12.6-5.2
+                    c-9.9-0.7-23.5,2.3-24.4,2.4c5-16,17.6-41.6,15.8-46.2c-0.5-1.3-1.9-2.3-2.7-2.3c-1.9,0-3.6,0.8-4.5,3.2
+                    c-4.3,11.3-11.9,26.6-15.1,35.8c-1.1,3.3-3.9,9-5.6,14c-1.5,4.3-2.3,6.6-2.3,6.7c0,1.7,0.4,2.9,1.2,3.4c0.6,0.4,1.6,0.6,3,0.6
+                    c3,0,7.6-0.8,13.7-2.5c6.1-1.7,11.6-2.5,16.4-2.5c3.2,0,6.1,0.4,8.7,1c1.4,0.4,2.3,0.6,3,0.8c-0.2,0.6-0.3,1.2-0.3,1.6
+                    c0,4,1.7,6,5,6c2.2,0,4.3-1.4,6.1-4.3c1.6-2.7,3.2-5.5,4.8-8.3c0.3-0.4,1.2-2,2.8-4.8c1.4-2.4,2.1-3.6,2.3-3.6
+                    c2.6-1,6.4-2,11.3-2.9c3.9-0.7,6.3-1,7.2-1c0.3,0,0.4,0.2,0.4,0.5c0,0.3,0,0.6,0.1,0.7c0,0.1-0.1,1.4-0.3,3.8
+                    c-0.2,2.7-0.3,5.1-0.3,7.2c0,8.5,1.4,12.8,4.2,12.8c1.9,0,3.5-2.2,4.8-6.5c0.9-3.1,1.7-7.2,2.3-12.3c0.2-2.5,0.5-5,0.8-7.5
+                    c0.5,0.2,1.4,0.2,2.6,0c1.6-0.2,2.3-0.3,2.2-0.3c0.5,0,1.2,0,2,0.1c0.8,0.1,1.3,0.1,1.5,0.1c1.1,0,1.8-0.4,2.3-1.2
+                    C735.8,112.8,736.3,111,736.7,108.2z M701.6,109.1c1.6-2.4,3.1-4.9,4.7-7.4c2.1-3.2,3.9-5.5,5.4-6.9c0.8,1,1.3,2.7,1.5,5.2
+                    c0.1,2,0.3,4,0.5,6L701.6,109.1z"/>
+                <path class="st0" d="M810.1,80.8c-0.9-0.9-1.7-1.3-2.6-1.3c-1.2,0-2.4,0.5-3.6,1.5c-2.3,7.3-5.1,15.1-8.4,23.4
+                    c-2.1,5.2-3.6,9.3-4.7,12.2c-0.7,0.4-1.5,0.8-2.4,1.2c-5.9,3.5-10.3,6.3-13.2,8.2c-1.7,0.9-4.4,1.9-8.1,2.9
+                    c-4.7,1.3-8.8,1.9-12.3,1.9c-2.2,0-4.1-0.4-5.8-1.1c-2.8-1.2-4.2-3.3-4.2-6.2c0-5.9,2.8-11.8,8.6-17.6c3.9-3.9,9.4-8,16.5-12.4
+                    c6.9-4.1,10.4-6.4,10.7-6.7c1.1-1.2,1.7-2.2,1.9-3c0.2-0.5,0.2-1.5,0.2-3.1c0-3.7-1.2-5.6-3.5-5.6c-3.2,0-8.3,2.6-15.5,7.7
+                    c-7.5,5.4-14,11.4-19.3,17.9c-6.3,7.8-9.5,14.6-9.5,20.5c0,6.4,2,11,5.9,13.9c2.9,2.1,6.7,3.1,11.4,3.1c8.9,0,20.7-3.7,35.4-11.2
+                    c-0.5,2.6-0.7,5.2-0.7,7.7c0,5,1.6,7.5,4.9,7.5c0.8,0,1.8-0.5,3-1.4c1.5-9.5,2.8-16.3,4.1-20.2c2.5-6.5,4.9-13,7.4-19.5
+                    C809.1,93.7,810.4,86.8,810.1,80.8z"/>
+                <path class="st0" d="M810.2,69.5c1.5,0.7,4.5,0.1,5.9-1.7c1.3-1.7,4.2-5.3,4.9-7.5c0.2-0.9-0.8-1.6-1.3-2.2c0,0-0.2-0.9-1.7-0.9
+                    c-0.6,0-1.4,0.1-2.6,0.6c-1,0.4-1.3,0.7-2,1.8c-1.2,1.8-2.2,3.7-2.8,4.8C809.8,66.2,808.5,68.7,810.2,69.5z"/>
+                <path class="st0" d="M834.3,79.4c-5.1,0-10.2,3.3-15.3,9.8c-3.9,5-7.5,11.4-10.7,19.2c-2.6,6.4-4,10.8-4.2,13.3
+                    c-0.5,6.2,1.2,11.1,5.2,14.8c4.2,3.8,10.2,5.8,18.1,5.8c10.1,0,18.9-3.8,26.4-11.4c6.6-6.7,10.2-14,10.9-21.8
+                    c0.7-8.8-1.9-15.9-7.8-21.5C851.1,82.1,843.6,79.4,834.3,79.4z M855.1,111.5c-1.1,6.3-4.1,11.4-9.3,15.3
+                    c-5.5,4.1-12.3,6.2-20.6,6.2c-5.3,0-8.9-2-10.8-5.9c-1-2.2-1.5-4.5-1.3-6.8c0.2-2,1.4-5.5,3.6-10.4c2.7-6,5.7-10.9,8.9-14.7
+                    c4.3-5,8.6-7.4,12.8-7.4c5.1,0,9.5,3.3,13.1,9.8C854.4,103.2,855.7,107.8,855.1,111.5z"/>
+            </g>
+        </svg>
+        <p id="ai-quote" class="ai-quote"></p>
+        <button id="nextButton" class="button pulse-animation">Siguiente</button>
     </div>
-    
-    <div id="video-container" class="draggable-video-container">
-        <video id="input-video"></video>
-        <canvas id="video-overlay-canvas" class="video-overlay-canvas"></canvas>
+
+    <!-- Pantalla de Instrucciones -->
+    <div id="instructions-screen" class="screen hidden">
+        <h2 class="title fade-in">Instrucciones</h2>
+        <ul class="instructions-list">
+            <li class="fade-in" style="animation-delay: 0.5s;">
+                <span class="icon"><i class="fas fa-hand-pointer"></i></span>
+                <p>Usa tus manos para generar ondas de gravedad que se visualizan en la malla.</p>
+            </li>
+            <li class="fade-in" style="animation-delay: 1s;">
+                <span class="icon"><i class="fas fa-music"></i></span>
+                <p>La onda visual está sincronizada con el tono del sonido.</p>
+            </li>
+            <li class="fade-in" style="animation-delay: 1.5s;">
+                <span class="icon"><i class="fas fa-camera"></i></span>
+                <p>Asegúrate de permitir el acceso a la cámara para una experiencia completa.</p>
+            </li>
+        </ul>
+        <button id="startButton" class="button fade-in" style="animation-delay: 2s;">Comenzar</button>
+        <a href="https://wa.me/573017089007" target="_blank" class="whatsapp-button">
+            <i class="fab fa-whatsapp"></i>
+        </a>
+    </div>
+
+    <!-- Pantalla de la Experiencia Interactiva -->
+    <div id="interactive-screen" class="screen hidden">
+        <div class="controls-container">
+            <button id="resetButton" class="control-button"><i class="fas fa-sync-alt"></i></button>
+            <button id="playPauseButton" class="control-button"><i class="fas fa-pause"></i></button>
+            <div class="volume-control">
+                <i class="fas fa-volume-down"></i>
+                <input type="range" id="volumeSlider" min="-30" max="0" value="-15">
+                <i class="fas fa-volume-up"></i>
+            </div>
+        </div>
+        <div class="gravity-mesh-container">
+            <canvas id="gravityMeshCanvas"></canvas>
+            <div class="instructions-text">
+                Usa tus manos para interactuar con la malla. La onda visual está sincronizada con el tono del sonido.
+            </div>
+        </div>
+        
+        <div id="video-container" class="draggable-video-container">
+            <video id="input-video"></video>
+            <canvas id="video-overlay-canvas" class="video-overlay-canvas"></canvas>
+        </div>
     </div>
     
     <script>
-        // --- Canvas and Mesh Setup ---
+        // --- Transiciones de pantalla ---
+        const welcomeScreen = document.getElementById('welcome-screen');
+        const nextButton = document.getElementById('nextButton');
+        const instructionsScreen = document.getElementById('instructions-screen');
+        const startButton = document.getElementById('startButton');
+        const interactiveScreen = document.getElementById('interactive-screen');
+        const aiQuoteElement = document.getElementById('ai-quote');
+
+        nextButton.addEventListener('click', () => {
+            welcomeScreen.classList.add('hidden');
+            instructionsScreen.style.display = 'flex';
+            setTimeout(() => {
+                instructionsScreen.classList.remove('hidden');
+            }, 50);
+        });
+
+        startButton.addEventListener('click', () => {
+            instructionsScreen.classList.add('hidden');
+            interactiveScreen.style.display = 'flex';
+            setTimeout(() => {
+                interactiveScreen.classList.remove('hidden');
+                setupAudio();
+                startCamera();
+                lastInteractionTime = Date.now();
+                animate();
+            }, 50);
+        });
+
+        // --- Generación de frase con IA ---
+        async function fetchAIQuote() {
+            const prompt = "Genera una frase corta, poética y conceptual sobre la interacción entre el movimiento, la gravedad y el sonido. No uses más de 15 palabras.";
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=`;
+            
+            try {
+                const payload = {
+                    contents: [{ parts: [{ text: prompt }] }],
+                    systemInstruction: {
+                        parts: [{ text: "Actúa como un poeta o un artista conceptual." }]
+                    },
+                };
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const result = await response.json();
+                const text = result?.candidates?.[0]?.content?.parts?.[0]?.text;
+                aiQuoteElement.textContent = text || "La gravedad canta cuando la materia se mueve.";
+            } catch (error) {
+                console.error("Error al generar la frase con IA:", error);
+                aiQuoteElement.textContent = "La gravedad canta cuando la materia se mueve.";
+            }
+        }
+        
+        document.addEventListener('DOMContentLoaded', fetchAIQuote);
+
+        // --- Configuración del Canvas y la Malla ---
         const canvas = document.getElementById('gravityMeshCanvas');
         const ctx = canvas.getContext('2d');
-        const startButton = document.getElementById('startButton');
-        const startOverlay = document.getElementById('start-overlay');
         const videoElement = document.getElementById('input-video');
         const videoContainer = document.getElementById('video-container');
         const videoOverlayCanvas = document.getElementById('video-overlay-canvas');
         const videoOverlayCtx = videoOverlayCanvas.getContext('2d');
         
-        const meshSize = 40; // Number of points per side
-        const points = [];
+        const meshSize = 40;
+        let points = [];
         
-        // --- Audio Configuration with Tone.js ---
+        // --- Configuración de Audio con Tone.js ---
         let oscillator;
         let panner;
         const usePentatonicScale = true;
         let lastInteractionTime = 0;
-        const audioDecayTime = 20000; // 20 seconds in milliseconds
+        const audioDecayTime = 20000;
+        let isPlaying = true;
         
         const pentatonicScale = [0, 2, 4, 7, 9];
         const chromaticScale = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
@@ -141,11 +474,11 @@
             await Tone.start();
             panner = new Tone.Panner().toDestination();
             oscillator = new Tone.Oscillator(440, "sine").connect(panner).start();
-            oscillator.volume.value = -30;
+            oscillator.volume.value = -15; // Volumen inicial por defecto
             console.log("Audio iniciado.");
         }
         
-        // --- MediaPipe Hands Configuration ---
+        // --- Configuración de MediaPipe Hands ---
         const hands = new Hands({
             locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
         });
@@ -186,8 +519,9 @@
             videoOverlayCtx.scale(-1, 1);
             videoOverlayCtx.translate(-videoOverlayCanvas.width, 0);
             
-            if (results.multiHandLandmarks) {
-                for (const landmarks of results.multiHandLandmarks) {
+            if (results.multiHandedness && results.multiHandLandmarks) {
+                for (let i = 0; i < results.multiHandLandmarks.length; i++) {
+                    const landmarks = results.multiHandLandmarks[i];
                     drawConnectors(videoOverlayCtx, landmarks, HAND_CONNECTIONS, { color: '#00FF00', lineWidth: 5 });
                     drawLandmarks(videoOverlayCtx, landmarks, { color: '#FF0000', lineWidth: 2 });
                 }
@@ -195,7 +529,7 @@
             videoOverlayCtx.restore();
         }
         
-        // --- Mesh Logic Functions ---
+        // --- Lógica de la Malla ---
         function resizeCanvas() {
             canvas.width = window.innerWidth;
             canvas.height = window.innerHeight;
@@ -203,7 +537,7 @@
         }
         
         function initPoints() {
-            points.length = 0;
+            points = [];
             const xSpacing = canvas.width / (meshSize + 1);
             const ySpacing = canvas.height / (meshSize + 1);
             
@@ -222,22 +556,31 @@
                 }
             }
         }
+
+        function resetExperience() {
+            initPoints();
+            if (oscillator) {
+                oscillator.volume.rampTo(-15, 0.5);
+                oscillator.frequency.rampTo(440, 0.5);
+            }
+            lastInteractionTime = Date.now();
+        }
         
         function drawMesh() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-            ctx.strokeStyle = '#333';
             ctx.lineWidth = 1;
-        
+            
             for (let i = 0; i < meshSize; i++) {
                 for (let j = 0; j < meshSize; j++) {
                     const index = i * meshSize + j;
                     const p1 = points[index];
-        
+                    
                     if (j < meshSize - 1) {
                         const p2 = points[i * meshSize + j + 1];
                         ctx.beginPath();
                         ctx.moveTo(p1.x, p1.y);
                         ctx.lineTo(p2.x, p2.y);
+                        ctx.strokeStyle = '#333';
                         ctx.stroke();
                     }
         
@@ -246,14 +589,15 @@
                         ctx.beginPath();
                         ctx.moveTo(p1.x, p1.y);
                         ctx.lineTo(p3.x, p3.y);
+                        ctx.strokeStyle = '#333';
                         ctx.stroke();
                     }
                 }
             }
         
             points.forEach(p => {
-                if (p.amplitude > 0.1) {
-                    const radius = Math.max(1, p.amplitude * 0.1);
+                if (p.amplitude > 1) {
+                    const radius = Math.max(2, p.amplitude * 0.2);
                     ctx.beginPath();
                     ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
                     const color = `hsl(${p.hue}, 100%, 50%)`;
@@ -267,13 +611,11 @@
         }
         
         function updateMesh() {
-            // Wave decay for all points
             points.forEach(p => {
-                p.amplitude *= 0.97;
-                p.y = p.originalY + p.amplitude * Math.sin(p.y * 0.1);
+                p.amplitude *= 0.95;
+                p.y = p.originalY + Math.sin(p.y * 0.1) * p.amplitude;
             });
             
-            // If hands are detected or mouse is clicked, apply a new perturbation
             if (handsLandmarks.length > 0) {
                 lastInteractionTime = Date.now();
                 handsLandmarks.forEach(hand => {
@@ -290,8 +632,7 @@
                 });
             }
 
-            // Update audio based on interaction
-            if (oscillator) {
+            if (oscillator && isPlaying) {
                 const now = Date.now();
                 const timeSinceLastInteraction = now - lastInteractionTime;
                 
@@ -299,12 +640,17 @@
                     const maxAmplitude = points.reduce((max, p) => Math.max(max, p.amplitude), 0);
                     const volume = THREE.MathUtils.mapLinear(maxAmplitude, 0, 100, -30, -5);
                     
-                    const noteIndex = Math.floor(THREE.MathUtils.mapLinear(handsLandmarks[0] ? handsLandmarks[0][8].y : 0.5, 1, 0, 0, usePentatonicScale ? pentatonicScale.length - 1 : chromaticScale.length - 1));
-                    const scale = usePentatonicScale ? pentatonicScale : chromaticScale;
-                    const note = Tone.Midi(60 + scale[noteIndex]).toFrequency();
-
+                    if (handsLandmarks.length > 0) {
+                        const firstHand = handsLandmarks[0];
+                        const indexTipY = firstHand[8].y;
+                        const noteIndex = Math.floor(THREE.MathUtils.mapLinear(indexTipY, 1, 0, 0, usePentatonicScale ? pentatonicScale.length - 1 : chromaticScale.length - 1));
+                        const scale = usePentatonicScale ? pentatonicScale : chromaticScale;
+                        const note = Tone.Midi(60 + scale[noteIndex]).toFrequency();
+                        
+                        oscillator.frequency.rampTo(note, 0.1);
+                    }
+                    
                     oscillator.volume.rampTo(volume, 0.1);
-                    oscillator.frequency.rampTo(note, 0.1);
                     
                     const firstAffected = points.find(p => p.amplitude > 1);
                     if (firstAffected) {
@@ -312,18 +658,20 @@
                         panner.pan.value = pan;
                     }
                 } else {
-                    oscillator.volume.rampTo(-Infinity, 2); // Fade out over 2 seconds
+                    oscillator.volume.rampTo(-Infinity, 2);
                 }
             }
         }
         
         function animate() {
-            updateMesh();
-            drawMesh();
+            if (isPlaying) {
+                updateMesh();
+                drawMesh();
+            }
             requestAnimationFrame(animate);
         }
         
-        // --- Drag and Resize Logic for Video Window ---
+        // --- Lógica de arrastrar y redimensionar para la ventana de video ---
         let isDragging = false;
         let isResizing = false;
         let offsetX, offsetY;
@@ -373,30 +721,60 @@
             videoContainer.style.cursor = 'move';
         });
         
-        // --- Event Listeners ---
-        canvas.addEventListener('click', (event) => {
+        // --- Event Listeners para la pantalla interactiva ---
+        const playPauseButton = document.getElementById('playPauseButton');
+        const resetButton = document.getElementById('resetButton');
+        const volumeSlider = document.getElementById('volumeSlider');
+        
+        playPauseButton.addEventListener('click', () => {
+            isPlaying = !isPlaying;
+            if (isPlaying) {
+                playPauseButton.innerHTML = '<i class="fas fa-pause"></i>';
+                Tone.getDestination().volume.rampTo(volumeSlider.value, 0.5);
+            } else {
+                playPauseButton.innerHTML = '<i class="fas fa-play"></i>';
+                Tone.getDestination().volume.rampTo(-Infinity, 0.5);
+            }
+        });
+
+        resetButton.addEventListener('click', () => {
+            resetExperience();
+        });
+
+        volumeSlider.addEventListener('input', (event) => {
+            const newVolume = event.target.value;
+            if (oscillator) {
+                Tone.getDestination().volume.rampTo(newVolume, 0.1);
+            }
+        });
+
+        canvas.addEventListener('mousedown', handleInteraction);
+        canvas.addEventListener('touchstart', handleInteraction, { passive: false });
+        
+        function handleInteraction(event) {
             lastInteractionTime = Date.now();
-            const mouseX = event.clientX;
-            const mouseY = event.clientY;
+            let mouseX, mouseY;
+
+            if (event.type === 'touchstart') {
+                event.preventDefault();
+                mouseX = event.touches[0].clientX;
+                mouseY = event.touches[0].clientY;
+            } else {
+                mouseX = event.clientX;
+                mouseY = event.clientY;
+            }
             
             points.forEach(p => {
                 const distance = Math.sqrt(Math.pow(mouseX - p.originalX, 2) + Math.pow(mouseY - p.originalY, 2));
-                const amplitude = Math.sin(distance / 50) * 100;
-                p.amplitude = amplitude;
+                const amplitude = THREE.MathUtils.mapLinear(distance, 0, 200, 100, 0);
+                p.amplitude = Math.max(p.amplitude, amplitude);
                 p.hue = (Math.random() * 360);
             });
-        });
-        
-        startButton.addEventListener('click', () => {
-            setupAudio();
-            startCamera();
-            startOverlay.style.display = 'none';
-            lastInteractionTime = Date.now(); // Set initial interaction time
-            animate();
-        });
+        }
         
         window.addEventListener('resize', resizeCanvas);
         resizeCanvas();
+        animate();
     </script>
 </body>
 </html>
