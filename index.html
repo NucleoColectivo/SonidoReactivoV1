@@ -243,6 +243,23 @@
             align-items: center;
             gap: 0.5rem;
         }
+
+        .back-button {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            color: white;
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            transition: background 0.3s;
+            z-index: 30;
+        }
+
+        .back-button:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
     </style>
 </head>
 <body>
@@ -365,6 +382,7 @@
 
     <!-- Pantalla de la Experiencia Interactiva -->
     <div id="interactive-screen" class="screen hidden">
+        <button id="backButton" class="back-button"><i class="fas fa-chevron-left"></i> Volver</button>
         <div class="controls-container">
             <button id="resetButton" class="control-button"><i class="fas fa-sync-alt"></i></button>
             <button id="playPauseButton" class="control-button"><i class="fas fa-pause"></i></button>
@@ -413,6 +431,20 @@
                 startCamera();
                 lastInteractionTime = Date.now();
                 animate();
+            }, 50);
+        });
+
+        const backButton = document.getElementById('backButton');
+        backButton.addEventListener('click', () => {
+            interactiveScreen.classList.add('hidden');
+            welcomeScreen.style.display = 'flex';
+            if (cameraFeed) cameraFeed.stop();
+            if (oscillator) {
+                Tone.Transport.stop();
+                Tone.context.close();
+            }
+            setTimeout(() => {
+                welcomeScreen.classList.remove('hidden');
             }, 50);
         });
 
